@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Penyelesaian SPL - Gauss Jordan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 p-8">
+
+<div class="max-w-4xl mx-auto">
+    <a href="/" class="inline-flex items-center gap-2 text-slate-500 hover:text-slate-800 mb-6 transition">
+        &larr; Kembali ke Menu
+    </a>
+
+    <h1 class="text-3xl font-bold text-slate-900 mb-2">Metode Gauss-Jordan</h1>
+    <p class="text-slate-500 mb-8">Menyelesaikan SPL dengan matriks augmented.</p>
+
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6">
+        <label class="font-bold text-slate-700">Jumlah Variabel / Persamaan (N):</label>
+        <div class="flex gap-4 mt-2">
+            <input type="number" id="size" value="3" min="2" max="6" class="border p-2 rounded w-24">
+            <button onclick="generateMatrix()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">Buat Matriks</button>
+        </div>
+    </div>
+
+    <div id="matrix-area" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6 hidden">
+        <h3 class="font-bold mb-4 border-b pb-2">Masukkan Koefisien & Konstanta</h3>
+        <p class="text-xs text-slate-400 mb-4">Kolom terakhir adalah nilai konstanta (Ruas Kanan).</p>
+        
+        <div id="grid-container" class="grid gap-2 mb-6 overflow-x-auto">
+            </div>
+
+        <button onclick="solveSPL()" class="w-full bg-emerald-600 text-white py-3 rounded-lg font-bold hover:bg-emerald-700 shadow-lg">Hitung Solusi</button>
+    </div>
+
+    <div id="result-area" class="hidden space-y-6">
+        <div class="bg-emerald-50 border border-emerald-200 p-6 rounded-xl">
+            <h3 class="text-emerald-800 font-bold text-lg mb-2">Solusi Akhir:</h3>
+            <div id="final-solution" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+        </div>
+
+        <div class="bg-white border border-slate-200 p-6 rounded-xl">
+            <h3 class="font-bold text-slate-800 mb-4">Langkah-Langkah Eliminasi</h3>
+            <div id="steps-container" class="space-y-6 text-sm"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function generateMatrix() {
+        const n = parseInt(document.getElementById('size').value);
+        const container = document.getElementById('grid-container');
+        container.innerHTML = '';
+        
+        // Setup Grid CSS: N+1 columns
+        container.style.gridTemplateColumns = `repeat(${n}, minmax(60px, 1fr)) 10px minmax(60px, 1fr)`;
+
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                container.innerHTML += `<input type="number" step="any" class="mat-input border p-2 rounded text-center bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" id="m-${i}-${j}" placeholder="x${j+1}">`;
+            }
+            // Divider visual
+            container.innerHTML += `<div class="flex items-center justify-center font-bold text-slate-400">=</div>`;
+            // Konstanta (Augmented)
+            container.innerHTML += `<input type="number" step="any" class="mat-input border p-2 rounded text-center bg-yellow-50 focus:ring-2 focus:ring-yellow-500 outline-none font-bold" id="m-${i}-${n}" placeholder="Hasil">`;
+        }
+        
+        document.getElementById('matrix-area').classList.remove('hidden');
+        document.getElementById('result-area').classList.add('hidden');
+    }
+
+    async function solveSPL() {
+        const n = parseInt(document.getElementById('size').value);
+        let matrix = [];
+
+        // Ambil data dari input
+        for (let i = 0; i < n; i++) {
+            let row = [];
+            for (let j = 0; j <= n; j++) {
+                const val = document.getElementById(`m-${i}-${j}`).value;
+                if (val === '') { alert("Mohon isi semua kolom matriks!"); return; }
+                row.push(parseFloat(val));
+            }
+            matrix.push(row);
+        }
+
+        // Kirim ke Backend
+        const res = await fetch('/calculate_spl', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ matrix: matrix })
+        });
+        const data = await res.json();
+
+        if(data.error) { alert(data.error); return; }
+
+        // Tampilkan Hasil
+        document.getElementById('result-area').classList.remove('hidden');
+        
+        // 1. Solusi Akhir
+        const solDiv = document.getElementById('final-solution');
+        solDiv.innerHTML = data.solution.map((val, idx) => 
+            `<div class="bg-white p-3 rounded shadow-sm border text-center">
+                <span class="text-slate-500 font-mono text-xs">x${idx+1}</span>
+                <div class="text-xl font-bold text-emerald-600">${val.toFixed(4)}</div>
+            </div>`
+        ).join('');
+
+        // 2. Langkah-langkah
+        const stepsDiv = document.getElementById('steps-container');
+        stepsDiv.innerHTML = data.steps.map((s, idx) => {
+            // Render matriks langkah
+            let matHTML = `<table class="border-collapse mt-2 mx-auto text-xs font-mono">`;
+            s.matrix.forEach(row => {
+                matHTML += `<tr>` + row.map(cell => `<td class="border p-2 text-center w-12">${cell.toFixed(2)}</td>`).join('') + `</tr>`;
+            });
+            matHTML += `</table>`;
+
+            return `<div class="border-b pb-4 last:border-0">
+                <p class="font-bold text-blue-700">Langkah ${idx+1}: <span class="font-normal text-slate-600">${s.step}</span></p>
+                ${matHTML}
+            </div>`
+        }).join('');
+    }
+</script>
+
+</body>
+</html>

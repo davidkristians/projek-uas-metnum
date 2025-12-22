@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalkulator Numerik Modern</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen py-10 px-4">
+
+    <div class="max-w-5xl mx-auto mb-6">
+        <a href="/" class="inline-flex items-center gap-2 text-slate-500 hover:text-blue-600 font-medium transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+            </svg>
+            Kembali ke Menu Utama
+        </a>
+    </div>
+
+    <div class="max-w-5xl mx-auto">
+        <div class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight">Kalkulator Metode Akar</h1>
+            <p class="text-slate-500 mt-2 text-lg">Penyelesaian Persamaan Non-Linear</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="lg:col-span-1 h-fit">
+                <div class="bg-white rounded-2xl shadow-xl p-6 border border-slate-100">
+                    <h2 class="text-xl font-bold text-slate-800 mb-4 border-b pb-2">Parameter Input</h2>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Pilih Metode</label>
+                        <select id="method" onchange="toggleInputs()" class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition duration-200">
+                            <option value="bisection">Bisection (Bagi Dua)</option>
+                            <option value="newton">Newton-Raphson</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Fungsi f(x)</label>
+                        <input type="text" id="func" value="x**2 - 4" class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Contoh: x**2 - 4">
+                        <p class="text-xs text-slate-400 mt-1">Gunakan syntax Python: x**2, sin(x), exp(x)</p>
+                    </div>
+
+                    <div id="bisection-inputs" class="grid grid-cols-2 gap-3 mb-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 mb-1 uppercase">Batas Bawah (a)</label>
+                            <input type="number" id="a" value="0" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 mb-1 uppercase">Batas Atas (b)</label>
+                            <input type="number" id="b" value="5" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <div id="newton-inputs" class="hidden mb-4">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Tebakan Awal (x0)</label>
+                        <input type="number" id="x0" value="1" class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-blue-500 outline-none">
+                        <div class="mt-2 bg-blue-50 text-blue-700 text-xs p-2 rounded border border-blue-100">
+                            <strong>Info:</strong> Turunan f'(x) akan dihitung otomatis oleh sistem.
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 mb-6">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 mb-1">Toleransi Error</label>
+                            <input type="number" id="tol" value="0.001" step="0.0001" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 mb-1">Max Iterasi</label>
+                            <input type="number" id="max_iter" value="20" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <button onclick="calculate()" id="btn-calc" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transform active:scale-95 transition duration-200 flex justify-center items-center gap-2">
+                        <span>Hitung Solusi</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                    
+                    <div id="error-msg" class="hidden mt-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm border border-red-200"></div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2">
+                <div id="empty-state" class="flex flex-col items-center justify-center h-full min-h-[400px] bg-white rounded-2xl shadow-sm border border-slate-200 p-10 text-center opacity-70">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-20 w-20 text-slate-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    <h3 class="text-xl font-semibold text-slate-400">Hasil perhitungan akan muncul di sini</h3>
+                    <p class="text-slate-400 text-sm">Masukkan parameter di sebelah kiri lalu klik Hitung.</p>
+                </div>
+
+                <div id="result-area" class="hidden space-y-6">
+                    
+                    <div class="bg-white rounded-2xl shadow-xl overflow-hidden border border-emerald-100">
+                        <div class="bg-emerald-500 p-4">
+                            <h3 class="text-white font-bold text-lg flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span id="res-title">Status Sukses</span>
+                            </h3>
+                        </div>
+                        <div class="p-6">
+                            <div class="text-center">
+                                <p class="text-slate-500 text-sm uppercase tracking-wide font-semibold">Akar Pendekatan</p>
+                                <p id="root-val" class="text-4xl font-extrabold text-emerald-600 mt-1 mb-2">0.00000</p>
+                                <p id="res-detail" class="text-slate-600 text-sm bg-slate-100 inline-block px-3 py-1 rounded-full">Detail...</p>
+                                <p id="res-deriv" class="text-slate-500 text-xs mt-3 italic font-mono"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
+                        <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                            <h3 class="font-bold text-slate-700">Tabel Iterasi</h3>
+                            <span class="text-xs text-slate-400">Scroll untuk melihat lebih banyak</span>
+                        </div>
+                        <div class="overflow-x-auto max-h-[500px]">
+                            <table class="w-full text-sm text-left text-slate-600">
+                                <thead class="text-xs text-slate-700 uppercase bg-slate-100 sticky top-0 shadow-sm">
+                                    <tr id="table-head-row">
+                                        </tr>
+                                </thead>
+                                <tbody id="table-body-rows" class="divide-y divide-slate-100">
+                                    </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleInputs() {
+            const method = document.getElementById('method').value;
+            const bisectionInputs = document.getElementById('bisection-inputs');
+            const newtonInputs = document.getElementById('newton-inputs');
+
+            if (method === 'bisection') {
+                bisectionInputs.classList.remove('hidden');
+                bisectionInputs.classList.add('grid');
+                newtonInputs.classList.add('hidden');
+            } else {
+                bisectionInputs.classList.add('hidden');
+                bisectionInputs.classList.remove('grid');
+                newtonInputs.classList.remove('hidden');
+            }
+        }
+
+        async function calculate() {
+            const btn = document.getElementById('btn-calc');
+            const originalBtnText = btn.innerHTML;
+            
+            btn.disabled = true;
+            btn.innerHTML = `<svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Memproses...`;
+
+            const method = document.getElementById('method').value;
+            
+            const payload = {
+                method: method,
+                func: document.getElementById('func').value,
+                tol: document.getElementById('tol').value,
+                max_iter: document.getElementById('max_iter').value,
+                a: document.getElementById('a').value,
+                b: document.getElementById('b').value,
+                x0: document.getElementById('x0').value
+            };
+
+            const errorDiv = document.getElementById('error-msg');
+            const resArea = document.getElementById('result-area');
+            const emptyState = document.getElementById('empty-state');
+            
+            errorDiv.classList.add('hidden');
+            resArea.classList.add('hidden');
+            emptyState.classList.remove('hidden');
+
+            try {
+                // Perubahan PENTING: Mengarah ke endpoint /calculate_roots
+                const response = await fetch('/calculate_roots', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+
+                btn.disabled = false;
+                btn.innerHTML = originalBtnText;
+
+                if (data.error) {
+                    errorDiv.innerText = "Error: " + data.error;
+                    errorDiv.classList.remove('hidden');
+                    return;
+                }
+
+                emptyState.classList.add('hidden');
+                resArea.classList.remove('hidden');
+                
+                document.getElementById('res-title').innerText = data.status;
+                document.getElementById('res-detail').innerText = data.message;
+                document.getElementById('root-val').innerText = data.root;
+                
+                if(method === 'newton') {
+                    document.getElementById('res-deriv').innerText = `Turunan otomatis: f'(x) = ${data.derivative}`;
+                } else {
+                    document.getElementById('res-deriv').innerText = "";
+                }
+
+                const theadRow = document.getElementById('table-head-row');
+                const tbody = document.getElementById('table-body-rows');
+                tbody.innerHTML = "";
+
+                const createCell = (text, isBold = false) => `<td class="px-6 py-4 whitespace-nowrap ${isBold ? 'font-bold text-slate-800 bg-blue-50' : ''}">${text}</td>`;
+                const createHeader = (text) => `<th scope="col" class="px-6 py-3">${text}</th>`;
+
+                if (method === 'bisection') {
+                    theadRow.innerHTML = [
+                        createHeader('Iterasi'), createHeader('a'), createHeader('b'), 
+                        createHeader('c (Tengah)'), createHeader('f(c)'), createHeader('Error')
+                    ].join('');
+                    
+                    data.data.forEach(row => {
+                        tbody.innerHTML += `<tr class="bg-white border-b hover:bg-slate-50 transition">
+                            ${createCell(row.iter)} ${createCell(row.a)} ${createCell(row.b)} 
+                            ${createCell(row.x, true)} ${createCell(row.fx)} ${createCell(row.error)}
+                        </tr>`;
+                    });
+                } else {
+                    theadRow.innerHTML = [
+                        createHeader('Iterasi'), createHeader('x_sebelum'), createHeader('f(x)'), 
+                        createHeader('f\'(x)'), createHeader('x_baru'), createHeader('Error')
+                    ].join('');
+                    
+                    data.data.forEach(row => {
+                        tbody.innerHTML += `<tr class="bg-white border-b hover:bg-slate-50 transition">
+                            ${createCell(row.iter)} ${createCell(row.x_old)} ${createCell(row.fx)} 
+                            ${createCell(row.dfx)} ${createCell(row.x, true)} ${createCell(row.error)}
+                        </tr>`;
+                    });
+                }
+
+            } catch (err) {
+                btn.disabled = false;
+                btn.innerHTML = originalBtnText;
+                errorDiv.innerText = "Gagal menghubungi server Python. Pastikan app.py berjalan.";
+                errorDiv.classList.remove('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
