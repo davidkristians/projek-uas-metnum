@@ -1,204 +1,231 @@
-from flask import Flask, render_template, request, jsonify
+import streamlit as st
+import numpy as np
+import pandas as pd
 import sympy as sp
-import copy
+import re
 
-app = Flask(__name__)
+# Konfigurasi Halaman
+st.set_page_config(page_title="Numerical Methods Pro", layout="wide")
 
-# --- ROUTES (Jalur Navigasi) ---
+# ==========================================
+# FUNGSI BANTUAN (HELPER)
+# ==========================================
 
-@app.route('/')
-def home():
-    """Halaman Utama (Menu Pilihan)"""
-    return render_template('index.html')
-
-@app.route('/roots')
-def page_roots():
-    """Halaman Kalkulator Akar (Bisection/Newton)"""
-    return render_template('roots.html')
-
-@app.route('/spl')
-def page_spl():
-    """Halaman Kalkulator SPL (Gauss-Jordan)"""
-    return render_template('spl.html')
-
-# --- LOGIKA BACKEND ---
-
-def evaluate_function(func_str, val):
+def preprocess_expression(expr_str):
     """
-    Menghitung nilai fungsi f(x) dengan penanganan error yang lebih baik.
+    Update 1: Membersihkan input agar support user yang mengetik '^' sebagai pangkat
+    dan menangani fungsi matematika umum.
+    """
+    # Ganti ^ dengan **
+    expr_str = expr_str.replace("^", "**")
+    return expr_str
+
+def get_derivative(func_str):
+    """
+    Update 2 & 3: Menghitung turunan secara simbolik untuk ditampilkan
+    sebagai bukti pemahaman teori.
     """
     x = sp.symbols('x')
     try:
-        # Ganti simbol pangkat '^' menjadi '**' agar sesuai sintaks Python
-        func_str = func_str.replace('^', '**')
-        
-        # Parsing string menjadi ekspresi matematika
+        # Parse string ke sympy expression
         expr = sp.sympify(func_str)
-        
-        # Substitusi nilai x dan hitung hasil float
-        result = float(expr.subs(x, val))
-        
-        # Cek jika hasilnya bilangan imajiner (tidak valid untuk metode ini)
-        if isinstance(result, complex):
-            return None
-            
-        return result
+        # Hitung turunan
+        diff_expr = sp.diff(expr, x)
+        return expr, diff_expr
     except Exception as e:
-        print(f"Error evaluating function: {e}")
-        return None
+        return None, None
 
-@app.route('/calculate_roots', methods=['POST'])
-def calculate_roots():
-    """Logika Perhitungan Akar (Bisection & Newton Raphson)"""
-    data = request.json
-    method = data.get('method')
-    func_str = data.get('func')
-    tol = float(data.get('tol'))
-    max_iter = int(data.get('max_iter'))
+# ==========================================
+# MENU 1: SISTEM PERSAMAAN LINEAR (GAUSS-JORDAN)
+# ==========================================
+def menu_spl():
+    st.header("🧮 Gauss-Jordan Elimination (With Partial Pivoting)")
+    st.caption("Solusi Sistem Persamaan Linear (SPL) dengan penanganan Pivot Nol.")
+
+    col1, col2 = st.columns([1, 2])
     
-    results = []
+    with col1:
+        n = st.number_input("Jumlah Variabel (N)", min_value=2, max_value=10, value=3)
     
-    try:
-        # --- METODE BISECTION ---
-        if method == 'bisection':
-            a = float(data.get('a'))
-            b = float(data.get('b'))
-            
-            fa = evaluate_function(func_str, a)
-            fb = evaluate_function(func_str, b)
+    st.write("### Masukkan Matriks Augmented")
+    st.info("Format: Koefisien variabel diikuti konstanta di kolom terakhir.")
 
-            if fa is None or fb is None:
-                return jsonify({'error': 'Fungsi tidak valid atau mengandung sintaks yang salah.'})
+    # Membuat grid input dinamis
+    matrix_data = []
+    cols = st.columns(n + 1)
+    
+    # Header label (x1, x2, ..., Konstanta)
+    for i, col in enumerate(cols):
+        with col:
+            if i < n:
+                st.markdown(f"**x{i+1}**")
+            else:
+                st.markdown("**= (Hasil)**")
 
-            if fa * fb > 0:
-                return jsonify({'error': 'Tebakan awal a dan b tidak mengurung akar (f(a)*f(b) > 0).'})
+    # Input values
+    for r in range(n):
+        row_inputs = []
+        cols = st.columns(n + 1)
+        for c in range(n + 1):
+            with cols[c]:
+                # Default value diset 0.0
+                val = st.number_input(f"R{r+1}C{c+1}", value=0.0, key=f"mat_{r}_{c}", label_visibility="collapsed")
+                row_inputs.append(val)
+        matrix_data.append(row_inputs)
 
-            for i in range(max_iter):
-                c = (a + b) / 2
-                fc = evaluate_function(func_str, c)
-                
-                if fc is None: break
+    if st.button("Hitung Solusi SPL", type="primary"):
+        solve_gauss_jordan(np.array(matrix_data, dtype=float), n)
 
-                error = abs(b - a)
-                results.append({
-                    'iter': i+1,
-                    'a': round(a, 6),
-                    'b': round(b, 6),
-                    'x': round(c, 6),
-                    'fx': round(fc, 6),
-                    'error': round(error, 6)
-                })
-
-                if abs(fc) < tol or error < tol:
-                    return jsonify({'status': 'Sukses', 'root': c, 'data': results})
-
-                if fa * fc < 0:
-                    b = c
-                    fb = fc
-                else:
-                    a = c
-                    fa = fc
-
-            return jsonify({'status': 'Gagal (Max Iter)', 'root': c, 'data': results})
-
-        # --- METODE NEWTON RAPHSON ---
-        elif method == 'newton':
-            x_curr = float(data.get('x0'))
-            
-            # Cari turunan fungsi secara otomatis
-            x_sym = sp.symbols('x')
-            func_expr = sp.sympify(func_str.replace('^', '**'))
-            deriv_expr = sp.diff(func_expr, x_sym) # Turunan pertama
-
-            for i in range(max_iter):
-                f_val = float(func_expr.subs(x_sym, x_curr))
-                f_prime = float(deriv_expr.subs(x_sym, x_curr))
-
-                if f_prime == 0:
-                    return jsonify({'error': 'Turunan nol ditemukan. Metode Newton gagal.'})
-
-                x_next = x_curr - (f_val / f_prime)
-                error = abs(x_next - x_curr)
-
-                results.append({
-                    'iter': i+1,
-                    'x_old': round(x_curr, 6),
-                    'fx': round(f_val, 6),
-                    'dfx': round(f_prime, 6),
-                    'x': round(x_next, 6),
-                    'error': round(error, 6)
-                })
-
-                if error < tol:
-                    return jsonify({'status': 'Sukses', 'root': x_next, 'data': results})
-
-                x_curr = x_next
-
-            return jsonify({'status': 'Gagal (Max Iter)', 'root': x_curr, 'data': results})
-
-    except Exception as e:
-        return jsonify({'error': f"Terjadi kesalahan sistem: {str(e)}"})
-
-
-@app.route('/calculate_spl', methods=['POST'])
-def calculate_spl():
-    """Logika Perhitungan SPL (Gauss-Jordan)"""
-    try:
-        data = request.json
-        matrix = data.get('matrix') # Matrix Augmented (N x N+1)
-        n = len(matrix)
-        steps = [] # Menyimpan snapshot matrix setiap langkah
-
-        # --- MULAI BAGIAN YG DI-IMPROVE (Gauss-Jordan dengan Partial Pivoting) ---
-        for i in range(n):
-            # 1. PARTIAL PIVOTING (Cari baris dengan nilai absolut terbesar di kolom i)
-            # Tujuannya menghindari pembagian dengan 0 dan mengurangi error pembulatan
-            max_row = i
-            for k in range(i + 1, n):
-                if abs(matrix[k][i]) > abs(matrix[max_row][i]):
-                    max_row = k
-            
-            # Tukar baris jika pivot terbesar bukan di baris saat ini
-            if max_row != i:
-                matrix[i], matrix[max_row] = matrix[max_row], matrix[i]
-                steps.append({
-                    'step': f"Tukar Baris {i+1} dengan Baris {max_row+1} (Strategi Pivoting)", 
-                    'matrix': copy.deepcopy(matrix)
-                })
-
-            # 2. Cek Pivot 0 (Setelah ditukar, jika masih 0 berarti matriks singular)
-            pivot = matrix[i][i]
-            if abs(pivot) < 1e-10: # Toleransi angka sangat kecil mendekati 0
-                return jsonify({'error': 'Sistem tidak memiliki solusi unik (Matriks Singular).'})
-            
-            # 3. Normalisasi (Jadikan diagonal utama menjadi 1)
-            for j in range(n + 1):
-                matrix[i][j] /= pivot
-            
-            steps.append({'step': f"Normalisasi Baris {i+1} (Bagi dengan {round(pivot, 4)})", 'matrix': copy.deepcopy(matrix)})
-
-            # 4. Eliminasi (Jadikan elemen lain di kolom yang sama menjadi 0)
-            for k in range(n):
-                if k != i:
-                    factor = matrix[k][i]
-                    for j in range(n + 1):
-                        matrix[k][j] -= factor * matrix[i][j]
-                    
-                    if factor != 0: # Hanya catat step jika ada perubahan
-                        steps.append({'step': f"Eliminasi Baris {k+1} - ({round(factor, 4)} * Baris {i+1})", 'matrix': copy.deepcopy(matrix)})
-        # --- SELESAI BAGIAN YG DI-IMPROVE ---
-
-        # Hasil akhir ada di kolom terakhir
-        solution = [row[n] for row in matrix]
+def solve_gauss_jordan(matrix, n):
+    steps = []
+    
+    # Proses Gauss-Jordan
+    for i in range(n):
+        # --- PARTIAL PIVOTING (Kunci agar tidak error saat 0) ---
+        pivot_row = i
+        # Cari nilai absolut terbesar di kolom i mulai dari baris i ke bawah
+        for k in range(i + 1, n):
+            if abs(matrix[k][i]) > abs(matrix[pivot_row][i]):
+                pivot_row = k
         
-        return jsonify({
-            'status': 'Sukses',
-            'solution': solution,
-            'steps': steps
-        })
+        # Tukar baris jika pivot row bukan baris saat ini
+        if pivot_row != i:
+            matrix[[i, pivot_row]] = matrix[[pivot_row, i]]
+            steps.append(f"🔄 **Tukar Baris:** Baris {i+1} ditukar dengan Baris {pivot_row+1} (Karena pivot awal {matrix[pivot_row][i]:.2f} lebih dominan atau pivot asli 0).")
+        else:
+            if matrix[i][i] == 0:
+                st.error("❌ Sistem tidak memiliki solusi unik (Singular Matrix).")
+                return
 
-    except Exception as e:
-        return jsonify({'error': str(e)})
+        # Normalisasi baris pivot (buat elemen diagonal jadi 1)
+        pivot_val = matrix[i][i]
+        matrix[i] = matrix[i] / pivot_val
+        # steps.append(f"Normalisasi Baris {i+1} (Dibagi {pivot_val:.2f})")
 
-if __name__ == '__main__':
-    app.run(debug=True)
+        # Eliminasi baris lain (buat jadi 0)
+        for k in range(n):
+            if k != i:
+                factor = matrix[k][i]
+                matrix[k] = matrix[k] - factor * matrix[i]
+
+    # Output Logika
+    with st.expander("🕵️ Lihat Langkah Pengerjaan (Trace)", expanded=True):
+        if len(steps) > 0:
+            for s in steps:
+                st.markdown(s)
+        else:
+            st.markdown("✅ Tidak diperlukan penukaran baris (Pivoting).")
+
+    # Output Hasil
+    st.divider()
+    st.subheader("💡 Solusi Akhir")
+    
+    res_cols = st.columns(n)
+    for i in range(n):
+        with res_cols[i]:
+            st.metric(label=f"x{i+1}", value=f"{matrix[i][-1]:.4f}")
+
+# ==========================================
+# MENU 2: AKAR PERSAMAAN (NEWTON RAPHSON)
+# ==========================================
+def menu_roots():
+    st.header("📉 Akar Persamaan (Newton-Raphson)")
+    st.caption("Update 1, 2, 3 diterapkan di sini.")
+
+    # Input Fungsi
+    func_input = st.text_input("Masukkan Fungsi f(x)", value="x^2 - 4", help="Gunakan sintaks Python/LaTeX, contoh: x^2 - 4 atau exp(x) - 3*x")
+    
+    # Preprocessing Input (Update 1)
+    clean_func = preprocess_expression(func_input)
+    
+    # Hitung Turunan Otomatis (Update 2)
+    expr, diff_expr = get_derivative(clean_func)
+
+    if expr is not None:
+        st.write("---")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**Fungsi Asli $f(x)$:**")
+            st.latex(sp.latex(expr))
+        with c2:
+            st.markdown("**Turunan $f'(x)$ (Otomatis):**")
+            # Update 3: Menampilkan turunan sebagai bukti teori
+            st.latex(sp.latex(diff_expr))
+        st.write("---")
+    else:
+        st.error("Input fungsi tidak valid.")
+        return
+
+    col_param1, col_param2, col_param3 = st.columns(3)
+    with col_param1:
+        x0 = st.number_input("Tebakan Awal (x0)", value=1.0)
+    with col_param2:
+        tol = st.number_input("Toleransi Error", value=1e-6, format="%.6f")
+    with col_param3:
+        max_iter = st.number_input("Max Iterasi", value=50, step=1)
+
+    if st.button("Hitung Akar", type="primary"):
+        solve_newton_raphson(expr, diff_expr, x0, tol, max_iter)
+
+def solve_newton_raphson(expr, diff_expr, x0, tol, max_iter):
+    # Konversi ke fungsi lambda python agar cepat dihitung
+    f = sp.lambdify(sp.symbols('x'), expr, 'numpy')
+    df = sp.lambdify(sp.symbols('x'), diff_expr, 'numpy')
+
+    data = []
+    x_curr = x0
+    success = False
+
+    for i in range(1, int(max_iter) + 1):
+        try:
+            f_val = f(x_curr)
+            df_val = df(x_curr)
+
+            if df_val == 0:
+                st.error("Turunan bernilai 0. Metode gagal (Division by zero).")
+                break
+
+            # Rumus Newton Raphson
+            x_next = x_curr - (f_val / df_val)
+            error = abs(x_next - x_curr)
+
+            data.append({
+                "Iterasi": i,
+                "x_curr": f"{x_curr:.6f}",
+                "f(x)": f"{f_val:.6f}",
+                "f'(x)": f"{df_val:.6f}",
+                "Error": f"{error:.6f}"
+            })
+
+            x_curr = x_next
+            if error < tol:
+                success = True
+                break
+        except Exception as e:
+            st.error(f"Terjadi kesalahan hitung: {e}")
+            break
+
+    # Tampilkan Tabel
+    df_res = pd.DataFrame(data)
+    st.table(df_res)
+
+    if success:
+        st.success(f"✅ Akar ditemukan di x = {x_curr:.6f}")
+    else:
+        st.warning("⚠️ Iterasi maksimum tercapai sebelum toleransi terpenuhi.")
+
+# ==========================================
+# MAIN APP LOGIC
+# ==========================================
+def main():
+    st.sidebar.title("Navigasi")
+    # Pilihan Menu
+    menu = st.sidebar.radio("Pilih Metode:", ["Sistem Persamaan Linear", "Akar Persamaan (Newton)"])
+
+    if menu == "Sistem Persamaan Linear":
+        menu_spl()
+    elif menu == "Akar Persamaan (Newton)":
+        menu_roots()
+
+if __name__ == "__main__":
+    main()
