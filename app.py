@@ -372,34 +372,100 @@ def menu_interp():
 def menu_calc():
     st.header("∫ Kalkulus Numerik (Integral & Turunan)")
     
-    tab_int, tab_diff = st.tabs(["Integrasi", "Diferensiasi"])
+    tab_int, tab_diff = st.tabs(["Integrasi (Luas Area)", "Diferensiasi (Gradien)"])
     
+    # --- TAB INTEGRASI ---
     with tab_int:
-        st.subheader("Hitung Luas Area (Integral)")
-        func_int = st.text_input("Fungsi f(x)", "x^2", key="f_int")
+        st.subheader("Hitung Luas Area di Bawah Kurva")
+        
+        # 1. Input Fungsi
+        func_int = st.text_input("Fungsi f(x)", "4 / (1 + x^2)", key="f_int", help="Contoh: x^3, sin(x), exp(x)")
+        
+        # 2. Input Parameter
+        col1, col2, col3 = st.columns(3)
+        
+        # PERBAIKAN: Hapus min_value=... agar fleksibel
+        # Gunakan format="%.4f" agar user bisa input desimal presisi
+        a = col1.number_input("Batas Bawah (a)", value=0.0, format="%.4f") 
+        b = col2.number_input("Batas Atas (b)", value=1.0, format="%.4f") 
+        
+        # Segmen (N) harus integer
+        n = int(col3.number_input("Jumlah Segmen (N)", min_value=2, value=10, step=1))
+        
         m_int = st.selectbox("Metode", ["Trapezium", "Simpson 1/3", "Simpson 3/8"])
-        
-        c1, c2, c3 = st.columns(3)
-        a = c1.number_input("Batas Bawah (a)", 0.0)
-        b = c2.number_input("Batas Atas (b)", 2.0)
-        n = int(c3.number_input("Segmen (n)", 10))
-        
+
+        # Validasi Aturan Simpson
+        if m_int == "Simpson 1/3" and n % 2 != 0:
+            st.warning("⚠️ Untuk Simpson 1/3, N harus GENAP. Program akan menggunakan N+1.")
+            n += 1
+        elif m_int == "Simpson 3/8" and n % 3 != 0:
+            st.warning("⚠️ Untuk Simpson 3/8, N harus Kelipatan 3. Program akan menyesuaikan.")
+            while n % 3 != 0: n += 1
+
         if st.button("Hitung Integral"):
-            f, _, _ = get_function(func_int)
+            # Panggil helper function Anda (pastikan get_function ada di kode utama)
+            f, expr, _ = get_function(func_int) 
+            
             if f:
+                # Setup Grid
                 h = (b - a) / n
                 x = np.linspace(a, b, n+1)
                 y = f(x)
                 
+                # Algoritma Hitung
                 res = 0
                 if m_int == "Trapezium":
                     res = (h/2) * (y[0] + 2*np.sum(y[1:-1]) + y[-1])
                 elif m_int == "Simpson 1/3":
                     res = (h/3) * (y[0] + 4*np.sum(y[1:-1:2]) + 2*np.sum(y[2:-2:2]) + y[-1])
                 elif m_int == "Simpson 3/8":
-                    res = (3*h/8) * (y[0] + 3*np.sum(y[1:-1]) - 3*np.sum(y[3:-1:3]) + y[-1]) # Simplified
+                    # Rumus Simpson 3/8 Manual Loop agar aman
+                    s = y[0] + y[-1]
+                    for i in range(1, n):
+                        if i % 3 == 0: s += 2 * y[i]
+                        else: s += 3 * y[i]
+                    res = (3*h/8) * s
                 
-                st.metric(label=f"Luas Area ({m_int})", value=f"{res:.5f}")
+                # Hitung Nilai Exact (Analitik) pakai SymPy untuk perbandingan
+                try:
+                    x_sym = sp.symbols('x')
+                    exact_val = float(sp.integrate(expr, (x_sym, a, b)))
+                    error = abs(exact_val - res)
+                except:
+                    exact_val = "Tidak dapat dihitung simbolik"
+                    error = "N/A"
+
+                # Tampilkan Hasil
+                st.divider()
+                c_res1, c_res2, c_res3 = st.columns(3)
+                c_res1.metric(label=f"Hasil Numerik ({m_int})", value=f"{res:.6f}")
+                
+                if isinstance(exact_val, float):
+                    c_res2.metric(label="Hasil Eksak (Analitik)", value=f"{exact_val:.6f}")
+                    c_res3.metric(label="Error Absolut", value=f"{error:.6e}")
+                else:
+                    c_res2.info("Integral analitik terlalu kompleks.")
+
+                # Visualisasi Area
+                st.write("---")
+                st.caption("Visualisasi Area:")
+                fig, ax = plt.subplots()
+                
+                # Plot Kurva Halus
+                x_smooth = np.linspace(a, b, 200)
+                y_smooth = f(x_smooth)
+                ax.plot(x_smooth, y_smooth, 'b', label='f(x)')
+                
+                # Plot Area (Fill)
+                ax.fill_between(x_smooth, y_smooth, alpha=0.2, color='blue')
+                
+                # Plot Segmen (Bar) - Aproksimasi
+                # Hanya visualisasi sederhana batangan
+                if n <= 50: # Kalau N terlalu banyak, tidak usah gambar bar
+                    ax.bar(x[:-1], y[:-1], width=h, align='edge', alpha=0.3, color='orange', edgecolor='black', label='Segmen')
+                
+                ax.legend()
+                st.pyplot(fig)
     
     with tab_diff:
         st.subheader("Hitung Kemiringan (Turunan)")
