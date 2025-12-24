@@ -370,173 +370,258 @@ def menu_interp():
 # 4. INTEGRASI & 5. DIFERENSIASI
 # ==========================================
 def menu_calc():
-    st.header("∫ Kalkulus Numerik (Integral & Turunan)")
-    
+    st.header("∫ Kalkulus Numerik")
     tab_int, tab_diff = st.tabs(["Integrasi (Luas Area)", "Diferensiasi (Gradien)"])
     
-    # --- TAB INTEGRASI ---
+    # --- TAB 1: INTEGRASI (Code yang sudah diperbaiki sebelumnya) ---
     with tab_int:
-        st.subheader("Hitung Luas Area di Bawah Kurva")
+        st.subheader("Hitung Integral Tentu")
+        st.caption("Menghitung luas area di bawah kurva f(x) dari a ke b.")
         
-        # 1. Input Fungsi
-        func_int = st.text_input("Fungsi f(x)", "4 / (1 + x^2)", key="f_int", help="Contoh: x^3, sin(x), exp(x)")
-        
-        # 2. Input Parameter
-        col1, col2, col3 = st.columns(3)
-        
-        # PERBAIKAN: Hapus min_value=... agar fleksibel
-        # Gunakan format="%.4f" agar user bisa input desimal presisi
-        a = col1.number_input("Batas Bawah (a)", value=0.0, format="%.4f") 
-        b = col2.number_input("Batas Atas (b)", value=1.0, format="%.4f") 
-        
-        # Segmen (N) harus integer
-        n = int(col3.number_input("Jumlah Segmen (N)", min_value=2, value=10, step=1))
-        
-        m_int = st.selectbox("Metode", ["Trapezium", "Simpson 1/3", "Simpson 3/8"])
+        # Contoh Input untuk User
+        with st.expander("💡 Contoh Input Kompleks (Klik disini)"):
+            st.markdown("""
+            * **Fungsi Gaussian:** `exp(-x^2)` (a=-1, b=1)
+            * **Trigonometri:** `sin(x)^2 + cos(x)` (a=0, b=3.14159)
+            * **Rasional:** `1 / (1 + x^2)` (a=0, b=1, Target=3.14/4)
+            """)
 
-        # Validasi Aturan Simpson
-        if m_int == "Simpson 1/3" and n % 2 != 0:
-            st.warning("⚠️ Untuk Simpson 1/3, N harus GENAP. Program akan menggunakan N+1.")
-            n += 1
-        elif m_int == "Simpson 3/8" and n % 3 != 0:
-            st.warning("⚠️ Untuk Simpson 3/8, N harus Kelipatan 3. Program akan menyesuaikan.")
-            while n % 3 != 0: n += 1
+        func_int = st.text_input("Fungsi f(x)", "4 / (1 + x^2)", key="f_int")
+        col1, col2, col3 = st.columns(3)
+        a = col1.number_input("Batas Bawah (a)", value=0.0, format="%.4f")
+        b = col2.number_input("Batas Atas (b)", value=1.0, format="%.4f")
+        # HAPUS min_value=2. Biarkan user input 1000 sekalipun.
+        n = int(col3.number_input("Jumlah Segmen (N)", value=10, min_value=1)) 
+        
+        m_int = st.selectbox("Metode Integrasi", ["Trapezium", "Simpson 1/3", "Simpson 3/8"])
 
         if st.button("Hitung Integral"):
-            # Panggil helper function Anda (pastikan get_function ada di kode utama)
-            f, expr, _ = get_function(func_int) 
-            
+            f, expr, _ = get_function(func_int)
             if f:
-                # Setup Grid
+                # Validasi N untuk Simpson
+                if m_int == "Simpson 1/3" and n % 2 != 0:
+                    st.warning("⚠️ Simpson 1/3 butuh N Genap. Menggunakan N+1.")
+                    n += 1
+                elif m_int == "Simpson 3/8" and n % 3 != 0:
+                    st.warning("⚠️ Simpson 3/8 butuh N kelipatan 3. Menggunakan kelipatan terdekat.")
+                    while n % 3 != 0: n += 1
+
                 h = (b - a) / n
                 x = np.linspace(a, b, n+1)
                 y = f(x)
                 
-                # Algoritma Hitung
                 res = 0
                 if m_int == "Trapezium":
                     res = (h/2) * (y[0] + 2*np.sum(y[1:-1]) + y[-1])
                 elif m_int == "Simpson 1/3":
                     res = (h/3) * (y[0] + 4*np.sum(y[1:-1:2]) + 2*np.sum(y[2:-2:2]) + y[-1])
                 elif m_int == "Simpson 3/8":
-                    # Rumus Simpson 3/8 Manual Loop agar aman
                     s = y[0] + y[-1]
                     for i in range(1, n):
                         if i % 3 == 0: s += 2 * y[i]
                         else: s += 3 * y[i]
                     res = (3*h/8) * s
                 
-                # Hitung Nilai Exact (Analitik) pakai SymPy untuk perbandingan
+                # Hitung Exact
                 try:
                     x_sym = sp.symbols('x')
-                    exact_val = float(sp.integrate(expr, (x_sym, a, b)))
-                    error = abs(exact_val - res)
-                except:
-                    exact_val = "Tidak dapat dihitung simbolik"
-                    error = "N/A"
+                    exact = float(sp.integrate(expr, (x_sym, a, b)))
+                    err = abs(exact - res)
+                except: exact, err = "N/A", "N/A"
 
-                # Tampilkan Hasil
-                st.divider()
-                c_res1, c_res2, c_res3 = st.columns(3)
-                c_res1.metric(label=f"Hasil Numerik ({m_int})", value=f"{res:.6f}")
-                
-                if isinstance(exact_val, float):
-                    c_res2.metric(label="Hasil Eksak (Analitik)", value=f"{exact_val:.6f}")
-                    c_res3.metric(label="Error Absolut", value=f"{error:.6e}")
-                else:
-                    c_res2.info("Integral analitik terlalu kompleks.")
+                c1, c2 = st.columns(2)
+                c1.metric("Hasil Numerik", f"{res:.6f}")
+                c1.caption(f"Step size (h) = {h:.6f}")
+                if exact != "N/A":
+                    c2.metric("Hasil Exact (Analitik)", f"{exact:.6f}")
+                    c2.metric("Error Absolut", f"{err:.6e}")
 
-                # Visualisasi Area
-                st.write("---")
-                st.caption("Visualisasi Area:")
-                fig, ax = plt.subplots()
-                
-                # Plot Kurva Halus
-                x_smooth = np.linspace(a, b, 200)
-                y_smooth = f(x_smooth)
-                ax.plot(x_smooth, y_smooth, 'b', label='f(x)')
-                
-                # Plot Area (Fill)
-                ax.fill_between(x_smooth, y_smooth, alpha=0.2, color='blue')
-                
-                # Plot Segmen (Bar) - Aproksimasi
-                # Hanya visualisasi sederhana batangan
-                if n <= 50: # Kalau N terlalu banyak, tidak usah gambar bar
-                    ax.bar(x[:-1], y[:-1], width=h, align='edge', alpha=0.3, color='orange', edgecolor='black', label='Segmen')
-                
-                ax.legend()
-                st.pyplot(fig)
-    
+    # --- TAB 2: DIFERENSIASI (Full Power) ---
     with tab_diff:
-        st.subheader("Hitung Kemiringan (Turunan)")
-        func_diff = st.text_input("Fungsi f(x)", "x^3 + 2x", key="f_diff")
-        x_val = st.number_input("Di titik x =", 1.0)
-        h_val = st.number_input("Step size (h)", 0.01, format="%.4f")
+        st.subheader("Hitung Turunan Numerik")
+        st.caption("Menghitung f'(x) menggunakan selisih data.")
+
+        # Contoh Input
+        with st.expander("💡 Contoh Input Turunan"):
+            st.markdown("""
+            * **Polinomial:** `x^3 - 2*x + 5` (Cek di x=2)
+            * **Eksponensial:** `exp(x)` (Turunannya adalah dirinya sendiri)
+            * **Logaritma:** `log(x)` (Cek di x=2, hasil harus 0.5)
+            """)
+
+        # Input Fleksibel
+        f_diff_str = st.text_input("Fungsi f(x)", "x^3", key="f_diff")
         
+        c1, c2 = st.columns(2)
+        val_x = c1.number_input("Titik Evaluasi (x)", value=2.0, format="%.4f")
+        # Step size h jangan dibatasi min_value! User boleh input 0.000001
+        h = c2.number_input("Step Size (h)", value=0.01, format="%.6f", step=0.001)
+
         if st.button("Hitung Turunan"):
-            f, expr, _ = get_function(func_diff)
+            f, expr, _ = get_function(f_diff_str)
             if f:
-                fwd = (f(x_val + h_val) - f(x_val)) / h_val
-                bwd = (f(x_val) - f(x_val - h_val)) / h_val
-                cen = (f(x_val + h_val) - f(x_val - h_val)) / (2*h_val)
+                # 1. Hitung Numerik
+                # Forward: (f(x+h) - f(x))/h
+                fwd = (f(val_x + h) - f(val_x)) / h
                 
-                # Exact value
-                exact = float(sp.diff(expr, sp.symbols('x')).subs(sp.symbols('x'), x_val))
+                # Backward: (f(x) - f(x-h))/h
+                bwd = (f(val_x) - f(val_x - h)) / h
+                
+                # Central: (f(x+h) - f(x-h))/(2h) -> Paling Akurat O(h^2)
+                cen = (f(val_x + h) - f(val_x - h)) / (2*h)
+
+                # 2. Hitung Exact (Bukti Teori)
+                try:
+                    x_sym = sp.symbols('x')
+                    diff_exact_expr = sp.diff(expr, x_sym)
+                    exact_val = float(diff_exact_expr.subs(x_sym, val_x))
+                except:
+                    exact_val = None
+
+                # 3. Tampilkan Tabel Perbandingan
+                st.write("### 📊 Hasil Perbandingan Metode")
                 
                 res_data = {
-                    "Metode": ["Forward", "Backward", "Central", "Exact"],
-                    "Hasil": [fwd, bwd, cen, exact],
-                    "Error": [abs(exact-fwd), abs(exact-bwd), abs(exact-cen), 0]
+                    "Metode": ["Forward Difference", "Backward Difference", "Central Difference"],
+                    "Rumus": ["(f(x+h) - f(x)) / h", "(f(x) - f(x-h)) / h", "(f(x+h) - f(x-h)) / 2h"],
+                    "Hasil Hitung": [fwd, bwd, cen]
                 }
-                st.table(pd.DataFrame(res_data))
-
+                
+                if exact_val is not None:
+                    res_data["Exact (Analitik)"] = [exact_val] * 3
+                    res_data["Error"] = [abs(exact_val - fwd), abs(exact_val - bwd), abs(exact_val - cen)]
+                    st.success(f"Nilai Exact (Analitik): {exact_val:.6f}")
+                
+                df_res = pd.DataFrame(res_data)
+                st.table(df_res.style.format({"Hasil Hitung": "{:.6f}", "Exact (Analitik)": "{:.6f}", "Error": "{:.6e}"}))
+                
+                st.info("ℹ️ **Analisis:** Metode *Central Difference* biasanya memiliki error paling kecil karena memperhitungkan sisi kiri dan kanan.")
 # ==========================================
 # 6. PENYELESAIAN ODE
 # ==========================================
 def menu_ode():
-    st.header("⚙️ Persamaan Diferensial (ODE)")
-    st.caption("Menyelesaikan y' = f(x, y)")
-    
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        method = st.radio("Metode", ["Euler", "Heun", "Runge-Kutta 4"])
-    with col2:
-        func_str = st.text_input("f(x, y) =", "x + y - 1")
-        st.caption("Contoh input: x + y, x - 2y, (x+y)/2")
-    
-    f, _, debug = get_function_xy(func_str)
-    
-    c1, c2, c3, c4 = st.columns(4)
-    x0 = c1.number_input("x0", 0.0)
-    y0 = c2.number_input("y0", 1.0)
-    xh = c3.number_input("Target x", 1.0)
-    h = c4.number_input("Step (h)", 0.1)
-    
-    if st.button("Simulasi ODE") and f:
-        n = int((xh - x0)/h)
-        x, y = x0, y0
-        res = [{"Iter": 0, "x": x, "y": y}]
+    st.header("⚙️ Persamaan Diferensial Biasa (ODE)")
+    st.markdown(r"Menyelesaikan persamaan berbentuk: $\frac{dy}{dx} = f(x, y)$")
+
+    # Layout Input Kiri-Kanan
+    col_kiri, col_kanan = st.columns([1, 2])
+
+    with col_kiri:
+        st.subheader("Konfigurasi")
+        method = st.selectbox("Pilih Metode", ["Bandingkan Semua", "Euler", "Heun", "Runge-Kutta 4"])
         
-        for i in range(n):
-            if method == "Euler":
-                y += h * f(x, y)
-            elif method == "Heun":
-                k1 = f(x, y)
-                k2 = f(x + h, y + h*k1)
-                y += (h/2)*(k1 + k2)
-            elif method == "Runge-Kutta 4":
-                k1 = f(x, y)
-                k2 = f(x + 0.5*h, y + 0.5*h*k1)
-                k3 = f(x + 0.5*h, y + 0.5*h*k2)
-                k4 = f(x + h, y + h*k3)
-                y += (h/6)*(k1 + 2*k2 + 2*k3 + k4)
+        # Parameter Awal (Initial Value Problem)
+        x0 = st.number_input("x Awal (x0)", value=0.0)
+        y0 = st.number_input("y Awal (y0)", value=1.0)
+        
+        # Target
+        xn = st.number_input("x Target (Cari y di x=...)", value=2.0)
+        h = st.number_input("Step Size (h)", value=0.1, format="%.4f")
+
+    with col_kanan:
+        st.subheader("Fungsi f(x, y)")
+        # Contoh Input
+        with st.expander("💡 Contoh Input ODE (Wajib 2 Variabel)"):
+            st.markdown("""
+            * **Pertumbuhan:** `y` (dy/dx = y) -> Solusi eksponensial.
+            * **Linear:** `x + y` (dy/dx = x+y).
+            * **Osilasi:** `y * cos(x)` (dy/dx = y cos x).
+            * **Decay:** `-2 * y + x`
+            """)
+        
+        func_ode = st.text_input("Masukkan f(x, y)", "x + y")
+        
+        if st.button("🚀 Jalankan Simulasi ODE", type="primary"):
+            # Parsing fungsi f(x,y)
+            f_ode, expr, msg = get_function_xy(func_ode)
             
-            x += h
-            res.append({"Iter": i+1, "x": x, "y": y})
-            
-        df_ode = pd.DataFrame(res)
-        st.line_chart(df_ode.set_index("x")["y"])
-        st.dataframe(df_ode)
+            if not f_ode:
+                st.error(f"Error Fungsi: {msg}")
+            else:
+                # Validasi Step
+                if h <= 0: st.error("Step size (h) harus positif!"); return
+                if xn <= x0: st.error("Target x harus lebih besar dari x0 (untuk versi ini)."); return
+
+                # Hitung jumlah langkah (N)
+                n_steps = int((xn - x0) / h)
+                
+                # Container hasil
+                results = {}
+                
+                # --- SOLVER ENGINE ---
+                def solve_euler():
+                    x, y = x0, y0
+                    path_x, path_y = [x], [y]
+                    for _ in range(n_steps):
+                        y += h * f_ode(x, y)
+                        x += h
+                        path_x.append(x); path_y.append(y)
+                    return path_x, path_y
+
+                def solve_heun():
+                    x, y = x0, y0
+                    path_x, path_y = [x], [y]
+                    for _ in range(n_steps):
+                        k1 = f_ode(x, y)
+                        k2 = f_ode(x + h, y + h * k1)
+                        y += (h / 2) * (k1 + k2)
+                        x += h
+                        path_x.append(x); path_y.append(y)
+                    return path_x, path_y
+
+                def solve_rk4():
+                    x, y = x0, y0
+                    path_x, path_y = [x], [y]
+                    for _ in range(n_steps):
+                        k1 = f_ode(x, y)
+                        k2 = f_ode(x + 0.5*h, y + 0.5*h*k1)
+                        k3 = f_ode(x + 0.5*h, y + 0.5*h*k2)
+                        k4 = f_ode(x + h, y + h*k3)
+                        y += (h / 6) * (k1 + 2*k2 + 2*k3 + k4)
+                        x += h
+                        path_x.append(x); path_y.append(y)
+                    return path_x, path_y
+
+                # Eksekusi sesuai pilihan
+                if method == "Euler" or method == "Bandingkan Semua":
+                    results["Euler"] = solve_euler()
+                if method == "Heun" or method == "Bandingkan Semua":
+                    results["Heun"] = solve_heun()
+                if method == "Runge-Kutta 4" or method == "Bandingkan Semua":
+                    results["RK4"] = solve_rk4()
+
+                # --- VISUALISASI ---
+                st.write("---")
+                st.subheader("📈 Grafik Solusi Numerik")
+                
+                fig, ax = plt.subplots()
+                
+                colors = {"Euler": "red", "Heun": "blue", "RK4": "green"}
+                markers = {"Euler": "--", "Heun": "-.", "RK4": "-"}
+
+                final_res = []
+
+                for name, (px, py) in results.items():
+                    ax.plot(px, py, label=name, color=colors[name], linestyle=markers[name])
+                    final_res.append({
+                        "Metode": name,
+                        "y Akhir (di x={:.2f})".format(px[-1]): py[-1],
+                        "Jumlah Step": len(px)-1
+                    })
+
+                ax.set_xlabel("x")
+                ax.set_ylabel("y")
+                ax.set_title(f"Solusi dy/dx = {func_ode}")
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+                st.pyplot(fig)
+
+                # Tabel Hasil Akhir
+                st.write("### 🏁 Nilai Akhir")
+                st.table(pd.DataFrame(final_res))
+                
+                if method == "Bandingkan Semua":
+                    st.info("ℹ️ **Analisis:** Perhatikan bahwa Runge-Kutta 4 (RK4) biasanya adalah yang paling akurat/halus, sedangkan Euler seringkali memiliki error yang membesar jika step (h) kurang kecil.")
 
 # ==========================================
 # MAIN ROUTING
