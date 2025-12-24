@@ -24,16 +24,32 @@ def page_spl():
 # --- LOGIKA BACKEND ---
 
 def evaluate_function(func_str, val):
+    """
+    Menghitung nilai fungsi f(x) dengan penanganan error yang lebih baik.
+    """
     x = sp.symbols('x')
     try:
+        # Ganti simbol pangkat '^' menjadi '**' agar sesuai sintaks Python
+        func_str = func_str.replace('^', '**')
+        
+        # Parsing string menjadi ekspresi matematika
         expr = sp.sympify(func_str)
-        return float(expr.subs(x, val))
-    except:
+        
+        # Substitusi nilai x dan hitung hasil float
+        result = float(expr.subs(x, val))
+        
+        # Cek jika hasilnya bilangan imajiner (tidak valid untuk metode ini)
+        if isinstance(result, complex):
+            return None
+            
+        return result
+    except Exception as e:
+        print(f"Error evaluating function: {e}")
         return None
 
 @app.route('/calculate_roots', methods=['POST'])
 def calculate_roots():
-    """Logika Perhitungan Akar (Kode Lama)"""
+    """Logika Perhitungan Akar (Bisection & Newton Raphson)"""
     data = request.json
     method = data.get('method')
     func_str = data.get('func')
@@ -41,80 +57,136 @@ def calculate_roots():
     max_iter = int(data.get('max_iter'))
     
     results = []
-    root = None
-    status = "Gagal"
-    msg = ""
-
+    
     try:
+        # --- METODE BISECTION ---
         if method == 'bisection':
             a = float(data.get('a'))
             b = float(data.get('b'))
-            if evaluate_function(func_str, a) * evaluate_function(func_str, b) >= 0:
-                return jsonify({'error': 'Syarat f(a)*f(b) < 0 tidak terpenuhi.'})
             
-            c_old = a
-            for i in range(1, max_iter + 1):
+            fa = evaluate_function(func_str, a)
+            fb = evaluate_function(func_str, b)
+
+            if fa is None or fb is None:
+                return jsonify({'error': 'Fungsi tidak valid atau mengandung sintaks yang salah.'})
+
+            if fa * fb > 0:
+                return jsonify({'error': 'Tebakan awal a dan b tidak mengurung akar (f(a)*f(b) > 0).'})
+
+            for i in range(max_iter):
                 c = (a + b) / 2
                 fc = evaluate_function(func_str, c)
-                error = abs(c - c_old) if i > 1 else abs(b - a)
-                results.append({'iter': i, 'a': round(a, 5), 'b': round(b, 5), 'x': round(c, 5), 'fx': round(fc, 5), 'error': round(error, 5)})
                 
-                if abs(fc) < tol or error < tol:
-                    root = c; status = "Sukses"; msg = f"Konvergen di iterasi {i}"; break
-                if evaluate_function(func_str, a) * fc < 0: b = c
-                else: a = c
-                c_old = c
+                if fc is None: break
 
+                error = abs(b - a)
+                results.append({
+                    'iter': i+1,
+                    'a': round(a, 6),
+                    'b': round(b, 6),
+                    'x': round(c, 6),
+                    'fx': round(fc, 6),
+                    'error': round(error, 6)
+                })
+
+                if abs(fc) < tol or error < tol:
+                    return jsonify({'status': 'Sukses', 'root': c, 'data': results})
+
+                if fa * fc < 0:
+                    b = c
+                    fb = fc
+                else:
+                    a = c
+                    fa = fc
+
+            return jsonify({'status': 'Gagal (Max Iter)', 'root': c, 'data': results})
+
+        # --- METODE NEWTON RAPHSON ---
         elif method == 'newton':
-            x0 = float(data.get('x0'))
-            x = sp.symbols('x')
-            expr = sp.sympify(func_str)
-            deriv = sp.diff(expr, x)
-            x_curr = x0
-            for i in range(1, max_iter + 1):
-                fx = float(expr.subs(x, x_curr))
-                dfx = float(deriv.subs(x, x_curr))
-                if dfx == 0: return jsonify({'error': 'Turunan nol.'})
-                x_next = x_curr - (fx / dfx)
+            x_curr = float(data.get('x0'))
+            
+            # Cari turunan fungsi secara otomatis
+            x_sym = sp.symbols('x')
+            func_expr = sp.sympify(func_str.replace('^', '**'))
+            deriv_expr = sp.diff(func_expr, x_sym) # Turunan pertama
+
+            for i in range(max_iter):
+                f_val = float(func_expr.subs(x_sym, x_curr))
+                f_prime = float(deriv_expr.subs(x_sym, x_curr))
+
+                if f_prime == 0:
+                    return jsonify({'error': 'Turunan nol ditemukan. Metode Newton gagal.'})
+
+                x_next = x_curr - (f_val / f_prime)
                 error = abs(x_next - x_curr)
-                results.append({'iter': i, 'x_old': round(x_curr, 5), 'fx': round(fx, 5), 'dfx': round(dfx, 5), 'x': round(x_next, 5), 'error': round(error, 5)})
-                if error < tol: root = x_next; status = "Sukses"; msg = f"Konvergen di iterasi {i}"; break
+
+                results.append({
+                    'iter': i+1,
+                    'x_old': round(x_curr, 6),
+                    'fx': round(f_val, 6),
+                    'dfx': round(f_prime, 6),
+                    'x': round(x_next, 6),
+                    'error': round(error, 6)
+                })
+
+                if error < tol:
+                    return jsonify({'status': 'Sukses', 'root': x_next, 'data': results})
+
                 x_curr = x_next
-                
-        return jsonify({'status': status, 'message': msg, 'root': round(root, 6) if root else '-', 'data': results, 'derivative': str(sp.diff(sp.sympify(func_str), sp.symbols('x'))) if method == 'newton' else '-'})
+
+            return jsonify({'status': 'Gagal (Max Iter)', 'root': x_curr, 'data': results})
+
     except Exception as e:
-        return jsonify({'error': str(e)})
+        return jsonify({'error': f"Terjadi kesalahan sistem: {str(e)}"})
+
 
 @app.route('/calculate_spl', methods=['POST'])
 def calculate_spl():
-    """Logika Baru: Eliminasi Gauss-Jordan"""
+    """Logika Perhitungan SPL (Gauss-Jordan)"""
     try:
         data = request.json
         matrix = data.get('matrix') # Matrix Augmented (N x N+1)
         n = len(matrix)
         steps = [] # Menyimpan snapshot matrix setiap langkah
 
-        # Algoritma Gauss-Jordan
+        # --- MULAI BAGIAN YG DI-IMPROVE (Gauss-Jordan dengan Partial Pivoting) ---
         for i in range(n):
-            # 1. Pivot (Jadikan diagonal utama menjadi 1)
-            pivot = matrix[i][i]
-            if pivot == 0:
-                return jsonify({'error': 'Pivot 0 terdeteksi. Sistem mungkin tidak memiliki solusi unik.'})
+            # 1. PARTIAL PIVOTING (Cari baris dengan nilai absolut terbesar di kolom i)
+            # Tujuannya menghindari pembagian dengan 0 dan mengurangi error pembulatan
+            max_row = i
+            for k in range(i + 1, n):
+                if abs(matrix[k][i]) > abs(matrix[max_row][i]):
+                    max_row = k
             
+            # Tukar baris jika pivot terbesar bukan di baris saat ini
+            if max_row != i:
+                matrix[i], matrix[max_row] = matrix[max_row], matrix[i]
+                steps.append({
+                    'step': f"Tukar Baris {i+1} dengan Baris {max_row+1} (Strategi Pivoting)", 
+                    'matrix': copy.deepcopy(matrix)
+                })
+
+            # 2. Cek Pivot 0 (Setelah ditukar, jika masih 0 berarti matriks singular)
+            pivot = matrix[i][i]
+            if abs(pivot) < 1e-10: # Toleransi angka sangat kecil mendekati 0
+                return jsonify({'error': 'Sistem tidak memiliki solusi unik (Matriks Singular).'})
+            
+            # 3. Normalisasi (Jadikan diagonal utama menjadi 1)
             for j in range(n + 1):
                 matrix[i][j] /= pivot
             
-            steps.append({'step': f"Normalisasi Baris {i+1} (Bagi dengan {round(pivot, 3)})", 'matrix': copy.deepcopy(matrix)})
+            steps.append({'step': f"Normalisasi Baris {i+1} (Bagi dengan {round(pivot, 4)})", 'matrix': copy.deepcopy(matrix)})
 
-            # 2. Eliminasi (Jadikan elemen lain di kolom yang sama menjadi 0)
+            # 4. Eliminasi (Jadikan elemen lain di kolom yang sama menjadi 0)
             for k in range(n):
                 if k != i:
                     factor = matrix[k][i]
                     for j in range(n + 1):
                         matrix[k][j] -= factor * matrix[i][j]
                     
-                    if factor != 0:
-                        steps.append({'step': f"Eliminasi Baris {k+1} menggunakan Baris {i+1}", 'matrix': copy.deepcopy(matrix)})
+                    if factor != 0: # Hanya catat step jika ada perubahan
+                        steps.append({'step': f"Eliminasi Baris {k+1} - ({round(factor, 4)} * Baris {i+1})", 'matrix': copy.deepcopy(matrix)})
+        # --- SELESAI BAGIAN YG DI-IMPROVE ---
 
         # Hasil akhir ada di kolom terakhir
         solution = [row[n] for row in matrix]
