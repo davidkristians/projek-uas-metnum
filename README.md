@@ -5,7 +5,7 @@ Project Akhir Mata Kuliah Metode Numerik
 
 Aplikasi web berbasis Python (Flask) untuk menyelesaikan masalah matematika menggunakan algoritma numerik. Aplikasi ini dirancang untuk menampilkan hasil perhitungan beserta **tabel iterasi** dan **analisis error** secara transparan.
 
-## 📋 Fitur Utama
+## Fitur Utama
 
 ### 1. Pencarian Akar Persamaan (Root Finding)
 Menyelesaikan persamaan non-linear $f(x) = 0$.
@@ -27,7 +27,7 @@ Menyelesaikan sistem persamaan linear $Ax = B$.
 
 ---
 
-## 🛠️ Prasyarat (Requirements)
+## Requirements
 
 Pastikan komputer Anda sudah terinstall:
 1.  **Python 3.x** (Cek dengan `python --version`)
@@ -35,7 +35,7 @@ Pastikan komputer Anda sudah terinstall:
 
 ---
 
-## 🚀 Cara Instalasi & Menjalankan (Step-by-Step)
+## Cara Instalasi & Menjalankan (Step-by-Step)
 
 Ikuti langkah ini untuk menjalankan program di komputer lokal Anda:
 
@@ -47,3 +47,4 @@ Jalankan perintah berikut untuk menginstall library yang dibutuhkan (`Flask` dan
 
 ```bash
 pip install -r requirements.txt
+
